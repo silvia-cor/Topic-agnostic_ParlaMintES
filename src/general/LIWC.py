@@ -39,8 +39,9 @@ def read_LIWC_dict(dict_path='../dataset/Spanish_LIWC2007_Dictionary.dic'):
     cat_feels = [split for split in splits if split[1] in cat_feels]
     # create a dictionary with every word and its categories
     for line in lines[cat_location[1] + 1:]:
-        row = re.split('\t', line.rstrip())
-        dic[row[0]] = list(row[1:])
+        if line != '\n':
+            row = re.split('\t', line.rstrip())
+            dic[row[0]] = list(row[1:])
     # create a dictionary for each macro-category
     # TODO: better encoding?
     dic_gram = {}

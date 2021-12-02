@@ -1,38 +1,31 @@
 from general.utils import pickled_resource
 from process_dataset import process_ParlaMint
-import random
 from SVM import build_SVM_experiment
+from clustering import kmeans_clustering
 
 if __name__ == '__main__':
-    focus = 'name'  # options: name, party, gender
-    lang = 'es'  # options: es, it
+    focus = 'party'  # options: name, party, gender
+    lang = 'es'  # options: es
 
     print(f'--- Lang: {lang} | Focus: {focus} ---')
     data_path = f"../pickles/dataset_ParlaMint_{lang}_{focus}.pickle"
     dataset = pickled_resource(data_path, process_ParlaMint, focus=focus, lang=lang)
-    print(f'Unique labels ({focus}):', len(dataset['unique_labels']))
+    print(f'Unique labels ({focus}): {len(dataset["unique_labels"])} {dataset["unique_labels"]}')
     print('#tot samples:', len(dataset['labels']))
 
-    # n = random.randint(0, 5789)
-    # print(dataset['texts'][n])
-    # author = dataset['labels'][n]
-    # print(dataset['unique_labels'][author])
-    # print(dataset['pos_tags_texts'][n])
-    # print(dataset['stress_texts'][n])
-    # print(dataset['liwc_gram_texts'][n])
-    # print(dataset['liwc_obj_texts'][n])
-    # print(dataset['liwc_cog_texts'][n])
-    # print(dataset['liwc_feels_texts'][n])
+    svm_output_path = f'../output/svm_ParlaMint_{lang}_{focus}.csv'  # csv file for the results
+    svm_pickle_path = f'../pickles/svm_preds_ParlaMint_{lang}_{focus}.pickle'  # pickle file for the predictions
 
-    svm_path = f'../output/exp_svm_ParlaMint_{lang}_{focus}.csv'
+    feats = {'base_features': True,
+             'pos_tags': True,
+             'stress': True,
+             'liwc_gram': True,
+             'liwc_obj': True,
+             'liwc_cog': True,
+             'liwc_feels': True
+             }
 
-    svm_feats = {'base_features': True,
-                 'pos_tags': False,
-                 'stress': False,
-                 'liwc_gram': False,
-                 'liwc_obj': False,
-                 'liwc_cog': False,
-                 'liwc_feels': False
-                 }
 
-    build_SVM_experiment(dataset, svm_feats, svm_path)
+
+    #build_SVM_experiment(dataset, feats, svm_output_path, svm_pickle_path)
+    kmeans_clustering(dataset, feats)

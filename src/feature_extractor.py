@@ -3,6 +3,7 @@ from sklearn.feature_selection import SelectKBest, chi2
 import nltk
 from scipy.sparse import hstack, csr_matrix
 from sklearn.preprocessing import normalize
+from collections import Counter
 from general.utils import tokenize_nopunct, get_function_words
 
 # ------------------------------------------------------------------------
@@ -58,15 +59,18 @@ def _sentence_lengths_freq(documents, upto):
 
 
 # vectorize the documents with tfidf and select the best features
-def _vector_select(tr, te, y_tr, analyzer_type, n_min, n_max):
+def _vector_select(tr, te, y_tr, analyzer_type, n_min, n_max, feat_ratio):
     vectorizer = TfidfVectorizer(analyzer=analyzer_type, ngram_range=(n_min, n_max), sublinear_tf=True)
     f_train = vectorizer.fit_transform(tr)
-    f_test = vectorizer.transform(te)
-    num_feats = int(f_train.shape[1] * 0.1)  # we take the best 10% features
+    num_feats = int(f_train.shape[1] * feat_ratio)
     selector = SelectKBest(chi2, k=num_feats)
     f_train = selector.fit_transform(f_train, y_tr)
-    f_test = selector.transform(f_test)
-    return f_train, f_test
+    if te is None:
+        return f_train
+    else:
+        f_test = vectorizer.transform(te)
+        f_test = selector.transform(f_test)
+        return f_train, f_test
 
 
 # ------------------------------------------------------------------------
@@ -97,7 +101,10 @@ def featuresExtractor(tr_data, te_data, lang='es',
     # final matrixes of features
     # initialize the right number of rows, or hstack won't work
     X_tr = csr_matrix((len(tr_data['texts']), 0))
-    X_te = csr_matrix((len(te_data['texts']), 0))
+    if te_data:
+        X_te = csr_matrix((len(te_data['texts']), 0))
+    else:
+        X_te = None
 
     fw = get_function_words(lang)
 
@@ -105,62 +112,84 @@ def featuresExtractor(tr_data, te_data, lang='es',
         # function words
         f = normalize(_function_words_freq(tr_data['texts'], fw))
         X_tr = hstack((X_tr, f))
-        f = normalize(_function_words_freq(te_data['texts'], fw))
-        X_te = hstack((X_te, f))
+        if te_data:
+            f = normalize(_function_words_freq(te_data['texts'], fw))
+            X_te = hstack((X_te, f))
         print(f'task function words (#features={f.shape[1]}) [Done]')
 
         # word lenghts
-        upto = len(max(tokenize_nopunct(''.join(tr_data['texts'])), key=len))  # find longest word in training set
+        lens = [len(word) for word in tokenize_nopunct(''.join(tr_data['texts']))]
+        upto = max([k for k,v in Counter(lens).items() if v >= 5])  # find longest word in training set appearing at least 10 times
         f = normalize(_word_lengths_freq(tr_data['texts'], upto))
         X_tr = hstack((X_tr, f))
-        f = normalize(_word_lengths_freq(te_data['texts'], upto))
-        X_te = hstack((X_te, f))
+        if te_data:
+            f = normalize(_word_lengths_freq(te_data['texts'], upto))
+            X_te = hstack((X_te, f))
         print(f'task word lengths (#features={f.shape[1]}) [Done]')
 
         # sentence lengths
-        sents = [t.strip() for t in nltk.tokenize.sent_tokenize(''.join(tr_data['texts'])) if t.strip()]
-        upto = max([len(tokenize_nopunct(t)) for t in sents])
+        sents = [t.strip() for t in nltk.tokenize.sent_tokenize(' '.join(tr_data['texts'])) if t.strip()]
+        lens = [len(tokenize_nopunct(t)) for t in sents]
+        upto = max([k for k,v in Counter(lens).items() if v >= 5])  # find longest sent in training set appearing at least 10 times
         f = normalize(_sentence_lengths_freq(tr_data['texts'], upto))
         X_tr = hstack((X_tr, f))
-        f = normalize(_sentence_lengths_freq(te_data['texts'], upto))
-        X_te = hstack((X_te, f))
-        print(f'longest sentence in train: {upto}')
+        if te_data:
+            f = normalize(_sentence_lengths_freq(te_data['texts'], upto))
+            X_te = hstack((X_te, f))
         print(f'task sentence lengths (#features={f.shape[1]}) [Done]')
 
     if pos_tags:
-        f_tr, f_te = _vector_select(tr_data['pos'], te_data['pos'], tr_data['y'], analyzer_type='word', n_min=2, n_max=5)
+        if te_data:
+            f_tr, f_te = _vector_select(tr_data['pos'], te_data['pos'], tr_data['y'], analyzer_type='word', n_min=2, n_max=3, feat_ratio=0.1)
+            X_te = hstack((X_te, f_te))
+        else:
+            f_tr = _vector_select(tr_data['pos'], None, tr_data['y'], analyzer_type='word', n_min=2, n_max=3, feat_ratio=0.1)
         X_tr = hstack((X_tr, f_tr))
-        X_te = hstack((X_te, f_te))
         print(f'task pos-tags encoding (#features={f_tr.shape[1]}) [Done]')
 
     if stress:
-        f_tr, f_te = _vector_select(tr_data['stress'], te_data['stress'], tr_data['y'], analyzer_type='char', n_min=2, n_max=7)
+        if te_data:
+            f_tr, f_te = _vector_select(tr_data['stress'], te_data['stress'], tr_data['y'], analyzer_type='char', n_min=2, n_max=7, feat_ratio=1)
+            X_te = hstack((X_te, f_te))
+        else:
+            f_tr = _vector_select(tr_data['stress'], None, tr_data['y'], analyzer_type='char', n_min=2, n_max=7, feat_ratio=1)
         X_tr = hstack((X_tr, f_tr))
-        X_te = hstack((X_te, f_te))
         print(f'task stress encoding (#features={f_tr.shape[1]}) [Done]')
 
     if liwc_gram:
-        f_tr, f_te = _vector_select(tr_data['liwc_gram'], te_data['liwc_gram'], tr_data['y'], analyzer_type='word', n_min=2, n_max=5)
+        if te_data:
+            f_tr, f_te = _vector_select(tr_data['liwc_gram'], te_data['liwc_gram'], tr_data['y'], analyzer_type='word', n_min=2, n_max=3, feat_ratio=0.1)
+            X_te = hstack((X_te, f_te))
+        else:
+            f_tr = _vector_select(tr_data['liwc_gram'], None, tr_data['y'], analyzer_type='word', n_min=2, n_max=3, feat_ratio=0.1)
         X_tr = hstack((X_tr, f_tr))
-        X_te = hstack((X_te, f_te))
         print(f'task liwc_gram encoding (#features={f_tr.shape[1]}) [Done]')
 
     if liwc_obj:
-        f_tr, f_te = _vector_select(tr_data['liwc_obj'], te_data['liwc_obj'], tr_data['y'], analyzer_type='word', n_min=2, n_max=5)
+        if te_data:
+            f_tr, f_te = _vector_select(tr_data['liwc_obj'], te_data['liwc_obj'], tr_data['y'], analyzer_type='word', n_min=2, n_max=3, feat_ratio=0.1)
+            X_te = hstack((X_te, f_te))
+        else:
+            f_tr = _vector_select(tr_data['liwc_obj'], None, tr_data['y'], analyzer_type='word', n_min=2, n_max=3, feat_ratio=0.1)
         X_tr = hstack((X_tr, f_tr))
-        X_te = hstack((X_te, f_te))
         print(f'task liwc_cog encoding (#features={f_tr.shape[1]}) [Done]')
 
     if liwc_cog:
-        f_tr, f_te = _vector_select(tr_data['liwc_cog'], te_data['liwc_cog'], tr_data['y'], analyzer_type='word', n_min=2, n_max=5)
+        if te_data:
+            f_tr, f_te = _vector_select(tr_data['liwc_cog'], te_data['liwc_cog'], tr_data['y'], analyzer_type='word', n_min=2, n_max=3, feat_ratio=0.1)
+            X_te = hstack((X_te, f_te))
+        else:
+            f_tr = _vector_select(tr_data['liwc_cog'], None, tr_data['y'], analyzer_type='word', n_min=2, n_max=3, feat_ratio=0.1)
         X_tr = hstack((X_tr, f_tr))
-        X_te = hstack((X_te, f_te))
         print(f'task liwc_cog encoding (#features={f_tr.shape[1]}) [Done]')
 
     if liwc_feels:
-        f_tr, f_te = _vector_select(tr_data['liwc_feels'], te_data['liwc_feels'], tr_data['y'], analyzer_type='word', n_min=2, n_max=5)
+        if te_data:
+            f_tr, f_te = _vector_select(tr_data['liwc_feels'], te_data['liwc_feels'], tr_data['y'], analyzer_type='word', n_min=2, n_max=3, feat_ratio=0.1)
+            X_te = hstack((X_te, f_te))
+        else:
+            f_tr = _vector_select(tr_data['liwc_feels'], None, tr_data['y'], analyzer_type='word', n_min=2, n_max=3, feat_ratio=0.1)
         X_tr = hstack((X_tr, f_tr))
-        X_te = hstack((X_te, f_te))
         print(f'task liwc_feels encoding (#features={f_tr.shape[1]}) [Done]')
 
     return X_tr, X_te

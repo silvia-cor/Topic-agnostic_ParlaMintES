@@ -41,13 +41,8 @@ def create_ParlaMint_csv(data_path='../dataset/ParlaMint-ES.conllu', final_file_
     df.to_csv(data_path + final_file_path, index=False, sep='\t')
 
 
-# TODO: add Italian option
-# analyze the .csv file of ParlaMint to extract some statistics
-def process_ParlaMint(data_path='../dataset/ParlaMint-ES.conllu', file_path='/ParlaMint-ES.csv', focus='name',
-                      lang='es'):
+def process_ParlaMint(data_path='../dataset/ParlaMint-ES.conllu', file_path='/ParlaMint-ES.csv'):
     print('--- CREATING DATASET PICKLE ---')
-    assert focus in ['name', 'party', 'gender'], 'The project focus must be in either name, party or gender'
-    assert lang in ['es', 'it'], 'The project language must be either es (spanish) or it (italian).'
     if not os.path.isfile(data_path + file_path):
         create_ParlaMint_csv(data_path)
     else:
@@ -60,32 +55,21 @@ def process_ParlaMint(data_path='../dataset/ParlaMint-ES.conllu', file_path='/Pa
     labels_lens = []
     pos_tags_texts = []
     field = 'Speaker_' + focus
-    if lang == 'es':
-        if focus == 'name':
-            df = df[df.groupby(field).Speaker_name.transform('count') >= 150]  # take Speakers with >=150 entries
-            unique_labels = df[field].unique()
-            print('Unique speakers:', len(unique_labels))
-        elif focus == 'party':
-            # cleaning the dataset from 'difficult' entries
-            df = df[df.groupby(field).Speaker_party.transform('count') >= 300]  # take Parties with >=300 entries
-            df.loc[(df['Speaker_name'] == 'Martínez Seijo, María Luz') & (df[field] == 'PP;PSOE;UP'), field] = 'PSOE'
-            df.loc[(df[field] == 'PP;PSOE') & (df['Speaker_name'].isin(['González Veracruz, María',
+
+    df = df[df.groupby(field).Speaker_name.transform('count') >= 150]  # take Speakers with >=150 entries
+    df.loc[(df['Speaker_name'] == 'Martínez Seijo, María Luz') & (df[field] == 'PP;PSOE;UP'), field] = 'PSOE'
+    df.loc[(df[field] == 'PP;PSOE') & (df['Speaker_name'].isin(['González Veracruz, María',
                                                                         'Martínez Seijo, María Luz',
                                                                         'Martín González, María Guadalupe'])), field] = 'PSOE'
-            df = df.drop(df[(df[field] == 'PP;PSOE') & (df['Speaker_name'] == 'Rodríguez Ramos, María Soraya')].index)
-            # re-label the parties
-            df.loc[(df[field].isin(['PSOE', 'PSC-PSOE'])), field] = 'Izquierda'
-            df.loc[(df[field].isin(['PP', 'PP-Foro'])), field] = 'Derecha'
-            df.loc[(df[field].isin(['ERC-S', 'EH Bildu', 'ERC-CATSÍ', 'UP'])), field] = 'Más izquierda'
-            df.loc[(df[field].isin(['Vox'])), field] = 'Más derecha'
-            df.loc[(df[field].isin(['EAJ-PNV', 'JxCat-Junts', 'CDC', 'CiU'])), field] = 'Regionalistas'
-            df.loc[(df[field].isin(['Cs'])), field] = 'Centro'
-            unique_labels = df[field].unique()
-        elif focus == 'gender':
-            unique_labels = df[field].unique()
+    df = df.drop(df[(df[field] == 'PP;PSOE') & (df['Speaker_name'] == 'Rodríguez Ramos, María Soraya')].index)
+    # re-label the parties
+    df.loc[(df[field].isin(['PSOE', 'PSC-PSOE'])), field] = 'Izquierda'
+    df.loc[(df[field].isin(['PP', 'PP-Foro'])), field] = 'Derecha'
+    df.loc[(df[field].isin(['ERC-S', 'EH Bildu', 'ERC-CATSÍ', 'UP'])), field] = 'Más izquierda'
+    df.loc[(df[field].isin(['Vox'])), field] = 'Más derecha'
+    df.loc[(df[field].isin(['EAJ-PNV', 'JxCat-Junts', 'CDC', 'CiU'])), field] = 'Regionalistas'
+    df.loc[(df[field].isin(['Cs'])), field] = 'Centro'
     df = df[df['Text'].notna()]
-    print('Dataset shape:', df.shape)
-    print('Unique labels:', len(unique_labels), unique_labels)
     #  create the categorical labels
     for i, label in enumerate(unique_labels):
         mini_df = df.loc[df[field] == label]['Text']
@@ -114,7 +98,6 @@ def process_ParlaMint(data_path='../dataset/ParlaMint-ES.conllu', file_path='/Pa
                }
     return dataset
 
-
 def _clean_text_es(text):
     # text = re.sub(r'\[\[(?:(?!\[|\])[\s\S])*\]\]', '', text)
     text = re.sub(r'ä', 'a', text)
@@ -124,4 +107,3 @@ def _clean_text_es(text):
     text = re.sub(r'¡', '¡ ', text)
     text = text.lower()
     return text
-
