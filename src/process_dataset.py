@@ -42,77 +42,48 @@ def create_ParlaMint_csv(data_path='../dataset/ParlaMint-ES.conllu', final_file_
 
 
 # TODO: add Italian option
-# analyze the .csv file of ParlaMint to extract some statistics
-def process_ParlaMint(data_path='../dataset/ParlaMint-ES.conllu', file_path='/ParlaMint-ES.csv', focus='name',
-                      lang='es'):
+# create the dataframe
+def process_ParlaMint(data_path='../dataset/ParlaMint-ES.conllu', file_path='/ParlaMint-ES.csv', lang='es'):
     print('--- CREATING DATASET PICKLE ---')
-    assert focus in ['name', 'party', 'gender'], 'The project focus must be in either name, party or gender'
     assert lang in ['es', 'it'], 'The project language must be either es (spanish) or it (italian).'
     if not os.path.isfile(data_path + file_path):
         create_ParlaMint_csv(data_path)
     else:
         print('PARLAMINT csv file found')
     df = pd.read_csv(data_path + file_path, sep='\t')  # read csv file
-    df = df[df.Speaker_role != 'Chairperson']  # delete ChairPerson entries
-    texts = []
-    labels = []
-    unique_labels = []
-    labels_lens = []
-    pos_tags_texts = []
-    field = 'Speaker_' + focus
     if lang == 'es':
-        if focus == 'name':
-            df = df[df.groupby(field).Speaker_name.transform('count') >= 150]  # take Speakers with >=150 entries
-            unique_labels = df[field].unique()
-            print('Unique speakers:', len(unique_labels))
-        elif focus == 'party':
-            # cleaning the dataset from 'difficult' entries
-            df = df[df.groupby(field).Speaker_party.transform('count') >= 300]  # take Parties with >=300 entries
-            df.loc[(df['Speaker_name'] == 'Martínez Seijo, María Luz') & (df[field] == 'PP;PSOE;UP'), field] = 'PSOE'
-            df.loc[(df[field] == 'PP;PSOE') & (df['Speaker_name'].isin(['González Veracruz, María',
-                                                                        'Martínez Seijo, María Luz',
-                                                                        'Martín González, María Guadalupe'])), field] = 'PSOE'
-            df = df.drop(df[(df[field] == 'PP;PSOE') & (df['Speaker_name'] == 'Rodríguez Ramos, María Soraya')].index)
-            # re-label the parties
-            df.loc[(df[field].isin(['PSOE', 'PSC-PSOE'])), field] = 'Izquierda'
-            df.loc[(df[field].isin(['PP', 'PP-Foro'])), field] = 'Derecha'
-            df.loc[(df[field].isin(['ERC-S', 'EH Bildu', 'ERC-CATSÍ', 'UP'])), field] = 'Más izquierda'
-            df.loc[(df[field].isin(['Vox'])), field] = 'Más derecha'
-            df.loc[(df[field].isin(['EAJ-PNV', 'JxCat-Junts', 'CDC', 'CiU'])), field] = 'Regionalistas'
-            df.loc[(df[field].isin(['Cs'])), field] = 'Centro'
-            unique_labels = df[field].unique()
-        elif focus == 'gender':
-            unique_labels = df[field].unique()
+        df = df[df.Speaker_role != 'Chairperson']  # delete ChairPerson entries
+        df = df[df.groupby('Speaker_party').Speaker_name.transform('count') >= 300]
+        party_groups = df.groupby('Speaker_party')
+        selected_speakers = []
+        for name, group in party_groups:
+            selected_speakers.extend(group['Speaker_name'].value_counts()[:2].index.tolist())
+        df = df[df['Speaker_name'].isin(selected_speakers)]
+        # resolve ambiguous Speaker_party entries
+        #.loc[(df['Speaker_name'] == 'Martínez Seijo, María Luz') & (df['Speaker_party'] == 'PP;PSOE;UP'), 'Speaker_party'] = 'PSOE'
+        #df.loc[(df['Speaker_party'] == 'PP;PSOE') & (df['Speaker_name'].isin(['González Veracruz, María',
+                                                                              #'Martínez Seijo, María Luz',
+                                                                              #'Martín González, María Guadalupe'])), 'Speaker_party'] = 'PSOE'
+        #df = df.drop(df[(df['Speaker_party'] == 'PP;PSOE') & (df['Speaker_name'] == 'Rodríguez Ramos, María Soraya')].index)
+        # assign Speaker_wing
+        df["Speaker_wing"] = np.nan
+        df.loc[(df['Speaker_party'].isin(['PSOE', 'PSC-PSOE'])), 'Speaker_wing'] = 'Izquierda'
+        df.loc[(df['Speaker_party'].isin(['PP', 'PP-Foro'])), 'Speaker_wing'] = 'Derecha'
+        df.loc[(df['Speaker_party'].isin(['ERC-S', 'EH Bildu', 'ERC-CATSÍ', 'UP'])), 'Speaker_wing'] = 'Más izquierda'
+        df.loc[(df['Speaker_party'].isin(['Vox'])), 'Speaker_wing'] = 'Más derecha'
+        df.loc[(df['Speaker_party'].isin(['EAJ-PNV', 'JxCat-Junts', 'CDC', 'CiU'])), 'Speaker_wing'] = 'Regionalistas'
+        df.loc[(df['Speaker_party'].isin(['Cs'])), 'Speaker_wing'] = 'Centro'
+        df['Text'] = df['Text'].apply(_clean_text_es)  # clean texts
     df = df[df['Text'].notna()]
-    print('Dataset shape:', df.shape)
-    print('Unique labels:', len(unique_labels), unique_labels)
-    #  create the categorical labels
-    for i, label in enumerate(unique_labels):
-        mini_df = df.loc[df[field] == label]['Text']
-        labels_lens.append(sum(len(text) for text in mini_df))
-        texts.extend(mini_df)
-        labels.extend([i] * len(mini_df))
-        pos_tags_texts.extend(df.loc[df[field] == label]['POS-tags'])
-    print('Minimum amount of text:', unique_labels[labels_lens.index(min(labels_lens))], min(labels_lens))
-    print('Maximum amount of text:', unique_labels[labels_lens.index(max(labels_lens))], max(labels_lens))
-    print(f'Mean among classes: {np.mean(labels_lens):.2f}')
-    stress_texts = stress_encoding(texts)
+    texts = df["Text"].to_numpy()
+    # creating stress encoding
+    df['Stress'] = stress_encoding(texts)
     print('Creating LIWC encodings...')
-    liwc_gram_texts = LIWC_encoding(texts, cat='gram')
-    liwc_obj_texts = LIWC_encoding(texts, cat='obj')
-    liwc_cog_texts = LIWC_encoding(texts, cat='cog')
-    liwc_feels_texts = LIWC_encoding(texts, cat='feels')
-    dataset = {'unique_labels': np.array(unique_labels),
-               'labels': np.array(labels),
-               'texts': np.array(texts),
-               'pos_tags_texts': np.array(pos_tags_texts),
-               'stress_texts': np.array(stress_texts),
-               'liwc_gram_texts': np.array(liwc_gram_texts),
-               'liwc_obj_texts': np.array(liwc_obj_texts),
-               'liwc_cog_texts': np.array(liwc_cog_texts),
-               'liwc_feels_texts': np.array(liwc_feels_texts)
-               }
-    return dataset
+    df['LIWC_gram'] = LIWC_encoding(texts, cat='gram')
+    df['LIWC_obj'] = LIWC_encoding(texts, cat='obj')
+    df['LIWC_cog'] = LIWC_encoding(texts, cat='cog')
+    df['LIWC_feels'] = LIWC_encoding(texts, cat='feels')
+    return df
 
 
 def _clean_text_es(text):
@@ -125,3 +96,14 @@ def _clean_text_es(text):
     text = text.lower()
     return text
 
+
+def dataset_info(df):
+    groups = df.groupby('Speaker_name')
+    len_groups = [(name, group['Text'].str.len().sum()) for name, group in groups]
+    print('Tot samples:', df.shape[0])
+    print('Unique speakers:', len(df['Speaker_name'].unique()), df['Speaker_name'].unique())
+    print('Unique parties:', len(df['Speaker_party'].unique()), df['Speaker_party'].unique())
+    print('Unique wings:', len(df['Speaker_wing'].unique()), df['Speaker_wing'].unique())
+    print('Min speaker:', min(len_groups, key=lambda x: x[1]))
+    print('Max speaker:', max(len_groups, key=lambda x: x[1]))
+    print(f'Mean among speakers: {np.mean([x[1] for x in len_groups]):.2f}')

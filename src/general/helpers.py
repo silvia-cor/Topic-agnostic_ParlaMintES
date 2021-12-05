@@ -5,17 +5,23 @@ from functools import partial
 import tqdm
 from general.utils import pickled_resource, tokenize_nopunct, divide_words_asterisk, find_LCP
 from general.LIWC import read_LIWC_dict
+import pandas as pd
 
 
 # divide the dataset for train-val-test experiment
 def divide_dataset(dataset):
+    labels = dataset['Speaker_name'].to_numpy()
+    texts = dataset['Text'].to_numpy()
+    pos = dataset['POS-tags'].to_numpy()
+    stress = dataset['Stress'].to_numpy()
+    liwc_gram = dataset['LIWC_gram'].to_numpy()
+    liwc_obj = dataset['LIWC_obj'].to_numpy()
+    liwc_cog = dataset['LIWC_cog'].to_numpy()
+    liwc_feels = dataset['LIWC_feels'].to_numpy()
     # divide the dataset into train+val and test
     trval_texts, te_texts, trval_pos, te_pos, trval_stress, te_stress, \
     trval_liwc_gram, te_liwc_gram, trval_liwc_obj, te_liwc_obj, trval_liwc_cog, te_liwc_cog, trval_liwc_feels, te_liwc_feels, \
-    y_trval, y_te = train_test_split(dataset['texts'], dataset['pos_tags_texts'], dataset['stress_texts'],
-                                     dataset['liwc_gram_texts'], dataset['liwc_obj_texts'], dataset['liwc_cog_texts'],
-                                     dataset['liwc_feels_texts'],
-                                     dataset['labels'], test_size=0.1, random_state=42, stratify=dataset['labels'])
+    y_trval, y_te = train_test_split(texts, pos, stress, liwc_gram, liwc_obj, liwc_cog, liwc_feels, labels, test_size=0.1, random_state=42, stratify=labels)
     # divide the train+val so that the dataset is train/val/test
     tr_texts, val_texts, tr_pos, val_pos, tr_stress, val_stress, \
     tr_liwc_gram, val_liwc_gram, tr_liwc_obj, val_liwc_obj, tr_liwc_cog, val_liwc_cog, tr_liwc_feels, val_liwc_feels, \

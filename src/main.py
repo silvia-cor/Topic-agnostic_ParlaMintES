@@ -1,22 +1,21 @@
 from general.utils import pickled_resource
-from process_dataset import process_ParlaMint
-from SVM import build_SVM_experiment
-from clustering import kmeans_clustering
+from process_dataset import process_ParlaMint, dataset_info
+from AA import build_AA_experiment
+from general.visualization import plot_parties
 
 if __name__ == '__main__':
-    focus = 'party'  # options: name, party, gender
     lang = 'es'  # options: es
+    learner = 'svm'  # oprtions: svm lr random_forest
 
-    print(f'--- Lang: {lang} | Focus: {focus} ---')
-    data_path = f"../pickles/dataset_ParlaMint_{lang}_{focus}.pickle"
-    dataset = pickled_resource(data_path, process_ParlaMint, focus=focus, lang=lang)
-    print(f'Unique labels ({focus}): {len(dataset["unique_labels"])} {dataset["unique_labels"]}')
-    print('#tot samples:', len(dataset['labels']))
+    print(f'--- Lang: {lang} ---')
+    data_path = f"../pickles/dataset_ParlaMint_{lang}.pickle"
+    dataset = pickled_resource(data_path, process_ParlaMint, lang=lang)
+    #dataset_info(dataset)
 
-    svm_output_path = f'../output/svm_ParlaMint_{lang}_{focus}.csv'  # csv file for the results
-    svm_pickle_path = f'../pickles/svm_preds_ParlaMint_{lang}_{focus}.pickle'  # pickle file for the predictions
+    output_path = f'../output/{learner}_ParlaMint_{lang}.csv'  # csv file for the results
+    pickle_path = f'../pickles/{learner}_preds_ParlaMint_{lang}.pickle'  # pickle file for the predictions
 
-    feats = {'base_features': True,
+    feats = {'base_features': False,
              'pos_tags': True,
              'stress': True,
              'liwc_gram': True,
@@ -25,7 +24,5 @@ if __name__ == '__main__':
              'liwc_feels': True
              }
 
-
-
-    #build_SVM_experiment(dataset, feats, svm_output_path, svm_pickle_path)
-    kmeans_clustering(dataset, feats)
+    build_AA_experiment(dataset, feats, learner, output_path, pickle_path)
+    #plot_parties(dataset, feats)
