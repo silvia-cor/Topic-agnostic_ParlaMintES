@@ -49,6 +49,7 @@ def find_LCP(x, y):
     return prefix_length
 
 
+# divide the given words in two lists: word with asterisk, and word without asterisk
 def divide_words_asterisk(words):
     list_w, list_w_ast = [], []
     for w in words:
