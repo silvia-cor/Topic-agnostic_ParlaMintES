@@ -6,8 +6,6 @@ import statsmodels.stats.multicomp as mc
 import scipy.stats as stats
 import numpy as np
 import collections
-from general.utils import pickled_resource
-from process_dataset import process_ParlaMint_4wings
 
 
 def ANOVA_test(dataset, label_type, res_files):

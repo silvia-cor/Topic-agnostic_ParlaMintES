@@ -1,7 +1,7 @@
 from general.utils import pickled_resource
 from process_dataset import process_ParlaMint_4wings, dataset_info
-from classification import build_multiclass_experiment, build_binary_experiment, party_status_experiment
-from transformer import trans_classification, trans_party_status_experiment
+from ml_classification import build_multiclass_experiment, build_binary_experiment, party_status_experiment
+from trans_classification import trans_classification, trans_party_status_experiment
 
 if __name__ == '__main__':
     focus = 'name'  # options: name wing party gender birth party_status
